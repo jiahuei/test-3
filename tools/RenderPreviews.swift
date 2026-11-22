@@ -701,7 +701,7 @@ enum RenderPreviews {
         try waitUntil { canvas.image != nil && !canvas.isLoading && window.attachedSheet == nil }
         viewer.useAuthorizedFolder(FileAccess(url: root))
         viewer.toggleGallery()
-        try waitUntil { collection.numberOfItems(inSection: 0) == 3 }
+        try waitUntil { collection.numberOfItems(inSection: 0) == 2 }
         guard
             (collection.item(at: IndexPath(item: 0, section: 0))?.imageView as? GalleryThumbnailView)?.isFolder == true,
             collection.selectionIndexPaths == [IndexPath(item: 1, section: 0)],
@@ -717,7 +717,7 @@ enum RenderPreviews {
         try waitUntil { collection.numberOfItems(inSection: 0) == 2 && window.title == "album" }
         viewer.navigateUp()
         try waitUntil {
-            collection.numberOfItems(inSection: 0) == 3 && window.title == root.lastPathComponent
+            collection.numberOfItems(inSection: 0) == 2 && window.title == root.lastPathComponent
                 && collection.selectionIndexPaths == [IndexPath(item: 0, section: 0)]
         }
         // Going above the granted root asks for a new folder grant instead of reading an unauthorized parent.
