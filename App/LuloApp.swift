@@ -57,6 +57,9 @@ final class LuloApp: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         menu.addItem(file)
         let view = NSMenuItem()
         view.submenu = NSMenu(title: "View")
+        let enclosing = view.submenu?.addItem(
+            withTitle: "Enclosing Folder", action: #selector(navigateUp), keyEquivalent: "\u{F700}")
+        enclosing?.keyEquivalentModifierMask = [.command]
         view.submenu?.addItem(withTitle: "Refresh", action: #selector(refreshImages), keyEquivalent: "r")
         view.submenu?.addItem(withTitle: "Toggle Gallery", action: #selector(toggleGallery), keyEquivalent: "g")
         view.submenu?.addItem(withTitle: "Previous Image", action: #selector(previousImage), keyEquivalent: "[")
@@ -86,6 +89,8 @@ final class LuloApp: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         if menuItem.action == #selector(trashImage) { return viewer?.canTrashCurrentImage == true }
         if menuItem.action == #selector(refreshImages) { return viewer?.canRefresh == true }
+        if menuItem.action == #selector(allowFolder) { return viewer?.canAllowFolderNavigation == true }
+        if menuItem.action == #selector(navigateUp) { return viewer?.canNavigateUp == true }
         if menuItem.action == #selector(showRows) || menuItem.action == #selector(showPreview) {
             let selected = menuItem.action == #selector(showRows) ? GalleryLayout.rows : .preview
             menuItem.state = viewer?.isGalleryVisible == true && viewer?.selectedGalleryLayout == selected ? .on : .off
@@ -106,6 +111,7 @@ final class LuloApp: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     @objc private func toggleBlurredBackground() { viewer?.toggleBlurredBackground() }
     @objc private func trashImage() { viewer?.trashCurrentImage() }
     @objc private func refreshImages() { viewer?.refreshImages() }
+    @objc private func navigateUp() { viewer?.navigateUp() }
     @objc private func allowFolder() { viewer?.allowFolderNavigation() }
     @objc private func previousImage() { viewer?.previousImage() }
     @objc private func nextImage() { viewer?.nextImage() }

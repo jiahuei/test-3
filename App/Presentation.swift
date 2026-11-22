@@ -55,7 +55,7 @@ final class RatingChip: NSTextField {
 final class BreadcrumbView: NSView {
     let rating = RatingChip()
     private let symbol = NSImageView()
-    private let parent = NSTextField(labelWithString: "")
+    private let parent = NSButton()
     private let parentSlash = NSTextField(labelWithString: "/")
     private let folder = NSButton()
     private let folderLabel = NSTextField(labelWithString: "")
@@ -64,6 +64,7 @@ final class BreadcrumbView: NSView {
     private let row = NSStackView()
     private var folderWidth: NSLayoutConstraint?
     var showGallery: (() -> Void)?
+    var showParent: (() -> Void)?
     override init(frame: NSRect) {
         super.init(frame: frame)
         setAccessibilityElement(true)
@@ -84,9 +85,14 @@ final class BreadcrumbView: NSView {
         filename.font = .systemFont(ofSize: 13, weight: .semibold)
         filename.lineBreakMode = .byTruncatingMiddle
         filename.textColor = Theme.textPrimary
-        parent.font = .systemFont(ofSize: 13)
+        parent.isBordered = false
+        parent.setButtonType(.momentaryPushIn)
+        parent.target = self
+        parent.action = #selector(openParent)
         parent.lineBreakMode = .byTruncatingTail
-        parent.textColor = Theme.textSecondary
+        parent.setContentCompressionResistancePriority(.defaultHigh, for: .horizontal)
+        parent.focusRingType = .default
+        filename.font = .systemFont(ofSize: 13, weight: .semibold)
         parentSlash.textColor = Theme.textTertiary
         fileSlash.textColor = Theme.textTertiary
         rating.identifier = .init("BreadcrumbRating")
@@ -114,27 +120,43 @@ final class BreadcrumbView: NSView {
         folderWidth = folder.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, multiplier: 0.5)
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
-    func update(file: URL?, authorizedFolder: URL?, gallery: Bool, windowWidth: CGFloat) {
-        let hasFolder = authorizedFolder != nil
+    func update(file: URL?, folder: URL?, gallery: Bool, windowWidth: CGFloat) {
+        let hasFolder = folder != nil
         let narrow = windowWidth < 1000
         folderWidth?.isActive = hasFolder && !gallery && file != nil
         symbol.isHidden = !hasFolder
-        parent.isHidden = !hasFolder || narrow
+        let parentURL = folder.flatMap { FolderNavigation.parent(of: $0) }
+        parent.isHidden = parentURL == nil || narrow
         parentSlash.isHidden = parent.isHidden
-        parent.stringValue = authorizedFolder?.deletingLastPathComponent().lastPathComponent ?? ""
+        if let parentURL {
+            let title = parentURL.lastPathComponent.isEmpty ? parentURL.path : parentURL.lastPathComponent
+            let paragraph = NSMutableParagraphStyle()
+            paragraph.lineBreakMode = .byTruncatingTail
+            parent.attributedTitle = NSAttributedString(
+                string: title,
+                attributes: [
+                    .font: NSFont.systemFont(ofSize: 13), .foregroundColor: Theme.textSecondary,
+                    .paragraphStyle: paragraph,
+                ])
+            parent.toolTip = "Go to \(title)"
+            parent.setAccessibilityLabel("Go to parent folder, \(title)")
+        } else {
+            parent.attributedTitle = NSAttributedString(string: "")
+        }
         folder.isHidden = !hasFolder || gallery
         folderLabel.isHidden = !hasFolder || !gallery
-        folder.title = authorizedFolder?.lastPathComponent ?? ""
+        folder.title = folder?.lastPathComponent ?? ""
         folderLabel.stringValue = folder.title
         folder.contentTintColor = Theme.textSecondary
         folder.setAccessibilityLabel("Show gallery, \(folder.title)")
         fileSlash.isHidden = !hasFolder || gallery || file == nil
         filename.isHidden = gallery || file == nil
         filename.stringValue = file?.lastPathComponent ?? ""
-        toolTip = (gallery ? authorizedFolder : file)?.path
+        toolTip = (gallery ? folder : file)?.path
         setAccessibilityValue(toolTip)
     }
     @objc private func openGallery() { showGallery?() }
+    @objc private func openParent() { showParent?() }
 }
 
 struct BackgroundImages: @unchecked Sendable {

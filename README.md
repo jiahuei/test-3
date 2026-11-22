@@ -6,7 +6,7 @@ Built with native macOS controls, Lulo keeps your images front and center. No ed
 
 - **Open JPEG/JPG, PNG, HEIF/HEIC, BMP, JPEG XL, and WebP images**.
 - **Browse with the arrow keys** after granting access to the containing folder.
-- **See the folder at a glance** with Gallery (Command-G). Double-click a thumbnail or press Return to view the selected image.
+- **See the folder at a glance** with Gallery (Command-G). Folders appear beside images; double-click or press Return to open a folder, and use Command-Up or the breadcrumb parent to go up. Double-click a thumbnail or press Return to view the selected image.
 - **Fit, zoom, and pan** with fit-to-window and 100% views, scroll zoom, and drag panning.
 - **Stay up to date** as images change or files are added or deleted. Refresh either view manually with Command-R.
 - **See embedded star ratings** in both Gallery and the image view.
@@ -39,7 +39,7 @@ Requires **macOS 14 or later**. Supports Apple Silicon and Intel Macs. RAW image
 
 Development previews are available through the **Lulo test build** download comment on pull requests. See the [download and first-launch instructions](QUICKSTART.md#download-a-pr-test-build); no Xcode is needed.
 
-Open an image from Finder or **File > Open**. Allow access to its folder to browse neighboring images, or cancel to view just that image.
+Open an image from Finder or **File > Open**. Allow access to its folder to browse neighboring images, or cancel to view just that image. You can also open a folder to start in Gallery and browse its visible subfolders.
 
 For building, testing, and contributing, see the [development guide](QUICKSTART.md).
 

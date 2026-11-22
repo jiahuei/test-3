@@ -68,42 +68,65 @@ public enum ImageLoader {
     }
 
     public static func discover(in folder: URL, isCancelled: () -> Bool = { false }) throws -> [ImageEntry] {
-        try discover(in: folder, isCancelled: isCancelled, readEntry: { try details(at: $0).entry })
+        try discoverContents(in: folder, isCancelled: isCancelled, readEntry: { try details(at: $0).entry }).images
+    }
+
+    public static func discoverContents(in folder: URL, isCancelled: () -> Bool = { false }) throws -> FolderContents {
+        try discoverContents(in: folder, isCancelled: isCancelled, readEntry: { try details(at: $0).entry })
     }
 
     // The metadata-read boundary allows deterministic cancellation tests without timing Image I/O.
     static func discover(
         in folder: URL, isCancelled: () -> Bool, readEntry: (URL) throws -> ImageEntry
     ) throws -> [ImageEntry] {
+        try discoverContents(in: folder, isCancelled: isCancelled, readEntry: readEntry).images
+    }
+
+    static func discoverContents(
+        in folder: URL, isCancelled: () -> Bool, readEntry: (URL) throws -> ImageEntry
+    ) throws -> FolderContents {
         func checkCancellation() throws {
             if isCancelled() { throw CancellationError() }
         }
         try checkCancellation()
         let urls = try FileManager.default.contentsOfDirectory(
-            at: folder, includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey, .creationDateKey],
-            options: [.skipsHiddenFiles])
-        let entries = try urls.compactMap { discoveredURL -> ImageEntry? in
+            at: folder,
+            includingPropertiesForKeys: [
+                .isRegularFileKey, .isDirectoryKey, .isSymbolicLinkKey, .creationDateKey,
+            ], options: [.skipsHiddenFiles])
+        var folders: [FolderEntry] = []
+        var images: [ImageEntry] = []
+        for discoveredURL in urls {
             try checkCancellation()
             // FileManager may return a resolved path (for example /private/var instead of /var).
             // Keep entries rooted in the granted folder so the opened image is not added twice.
             let url = folder.appendingPathComponent(discoveredURL.lastPathComponent)
-            guard let format = ImageFormat(url: url),
+            guard
                 let values = try? discoveredURL.resourceValues(forKeys: [
-                    .isRegularFileKey, .isSymbolicLinkKey, .creationDateKey,
-                ]
-                ),
-                values.isRegularFile == true, values.isSymbolicLink != true
-            else { return nil }
+                    .isRegularFileKey, .isDirectoryKey, .isSymbolicLinkKey, .creationDateKey,
+                ]), values.isSymbolicLink != true
+            else { continue }
+            if values.isDirectory == true {
+                folders.append(FolderEntry(url: url))
+                continue
+            }
+            guard let format = ImageFormat(url: url), values.isRegularFile == true else { continue }
             // Keep unreadable supported files navigable so a single bad file does not block the folder.
-            let entry =
+            images.append(
                 (try? readEntry(url))
-                ?? ImageEntry(url: url, format: format, createdAt: values.creationDate)
+                    ?? ImageEntry(url: url, format: format, createdAt: values.creationDate))
             try checkCancellation()
-            return entry
         }
         // Also cover empty folders and a cancellation after the final skipped entry.
         try checkCancellation()
-        return entries
+        folders.sort {
+            let comparison = $0.name.localizedStandardCompare($1.name)
+            if comparison == .orderedSame {
+                return $0.url.absoluteString < $1.url.absoluteString
+            }
+            return comparison == .orderedAscending
+        }
+        return FolderContents(folders: folders, images: images)
     }
 
     public static func details(at url: URL) throws -> ImageDetails {

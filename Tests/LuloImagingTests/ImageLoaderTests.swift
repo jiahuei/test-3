@@ -210,6 +210,26 @@ func folderDiscoveryAndRecoverableErrors() throws {
     }
 }
 
+/// Ensures folder browsing lists visible subfolders without recursing, while images remain nonrecursive.
+@Test
+func folderContentsIncludeDirectSubfoldersOnly() throws {
+    try withFolder { folder in
+        let album = folder.appendingPathComponent("album")
+        let hidden = folder.appendingPathComponent(".hidden")
+        for url in [album, hidden] {
+            try FileManager.default.createDirectory(at: url, withIntermediateDirectories: false)
+        }
+        try fixture(at: album.appendingPathComponent("nested.png"))
+        try fixture(at: folder.appendingPathComponent("cover.png"))
+        try FileManager.default.createSymbolicLink(
+            at: folder.appendingPathComponent("linked"), withDestinationURL: album)
+        let contents = try ImageLoader.discoverContents(in: folder)
+        #expect(contents.folders == [FolderEntry(url: album)])
+        #expect(contents.images.map { $0.url.lastPathComponent } == ["cover.png"])
+        #expect(try ImageLoader.discover(in: folder).map { $0.url.lastPathComponent } == ["cover.png"])
+    }
+}
+
 /// Ensures capture timestamps respect embedded offsets and missing/invalid fields remain optional.
 @Test
 func captureTimestamp() {
