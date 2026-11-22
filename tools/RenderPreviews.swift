@@ -115,6 +115,7 @@ enum RenderPreviews {
         try verifyCachedNavigation(fixture: fixture)
         try verifyObsoleteFolderScan(fixture: fixture)
         try verifyGallery(fixture: fixture, output: output)
+        try verifyFolderNavigation(fixture: fixture)
         try verifyPreviewRetention()
         try verifyRefreshAnimation(fixture: fixture)
         try verifyRefreshAndRatings(output: output)
@@ -658,6 +659,75 @@ enum RenderPreviews {
         print(
             "Verified gallery permissions, rated thumbnails, keyboard opening, reuse, multi-select filters, Trash availability, and session reset."
         )
+    }
+
+    /// Ensures Gallery lists a direct subfolder, opens it without another grant, and returns through up navigation.
+    private static func verifyFolderNavigation(fixture: URL) throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let album = root.appendingPathComponent("album", isDirectory: true)
+        try FileManager.default.createDirectory(at: album, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let cover = root.appendingPathComponent("cover.png")
+        let first = album.appendingPathComponent("first.png")
+        let second = album.appendingPathComponent("second.png")
+        for url in [cover, first, second] { try FileManager.default.copyItem(at: fixture, to: url) }
+        let viewer = ViewerController()
+        guard let window = viewer.window, let content = window.contentView,
+            let gallery = descendants(content).compactMap({ $0 as? GalleryView }).first,
+            let collection = descendants(gallery).compactMap({ $0 as? NSCollectionView }).first,
+            let canvas = descendants(content).compactMap({ $0 as? ImageCanvas }).first,
+            let breadcrumb = window.toolbar?.items.compactMap(\.view).compactMap({ $0 as? BreadcrumbView }).first
+        else { throw PreviewError.galleryFailed(line: #line) }
+        defer { window.close() }
+        window.setContentSize(NSSize(width: 1000, height: 680))
+        func waitUntil(_ line: Int = #line, _ ready: () -> Bool) throws {
+            let deadline = Date().addingTimeInterval(15)
+            while !ready() && Date() < deadline {
+                if let panel = window.attachedSheet as? NSOpenPanel { panel.cancel(nil) }
+                settle()
+            }
+            guard ready() else { throw PreviewError.galleryFailed(line: line) }
+        }
+        func key(_ code: UInt16, characters: String = "") throws {
+            guard
+                let event = NSEvent.keyEvent(
+                    with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+                    windowNumber: window.windowNumber, context: nil, characters: characters,
+                    charactersIgnoringModifiers: characters, isARepeat: false, keyCode: code)
+            else { throw PreviewError.galleryFailed(line: #line) }
+            collection.keyDown(with: event)
+        }
+        viewer.open(cover)
+        try waitUntil { canvas.image != nil && !canvas.isLoading && window.attachedSheet == nil }
+        viewer.useAuthorizedFolder(FileAccess(url: root))
+        viewer.toggleGallery()
+        try waitUntil { collection.numberOfItems(inSection: 0) == 2 }
+        guard
+            (collection.item(at: IndexPath(item: 0, section: 0))?.imageView as? GalleryThumbnailView)?.isFolder == true,
+            collection.selectionIndexPaths == [IndexPath(item: 1, section: 0)],
+            let parentButton = descendants(breadcrumb).compactMap({ $0 as? NSButton }).first(where: {
+                $0.accessibilityLabel()?.hasPrefix("Go to parent folder") == true
+            }), !parentButton.isHidden
+        else { throw PreviewError.galleryFailed(line: #line) }
+        try key(123)
+        guard collection.selectionIndexPaths == [IndexPath(item: 0, section: 0)] else {
+            throw PreviewError.galleryFailed(line: #line)
+        }
+        try key(36, characters: "\r")
+        try waitUntil { collection.numberOfItems(inSection: 0) == 2 && window.title == "album" }
+        viewer.navigateUp()
+        try waitUntil {
+            collection.numberOfItems(inSection: 0) == 2 && window.title == root.lastPathComponent
+                && collection.selectionIndexPaths == [IndexPath(item: 0, section: 0)]
+        }
+        // Going above the granted root asks for a new folder grant instead of reading an unauthorized parent.
+        viewer.navigateUp()
+        guard let panel = window.attachedSheet as? NSOpenPanel else {
+            throw PreviewError.galleryFailed(line: #line)
+        }
+        panel.cancel(nil)
+        try waitUntil { window.attachedSheet == nil && window.title == root.lastPathComponent }
+        print("Verified subfolder tiles, opening a folder, up navigation, breadcrumb parent, and grant boundaries.")
     }
 
     /// Ensures Trash confirmation, cancellation, failure, navigation, and stale completion use the captured image.
@@ -1322,7 +1392,7 @@ enum RenderPreviews {
         let gate = ScanCheckpointGate()
         let viewer = ViewerController { folder, isCancelled in
             defer { gate.finish() }
-            return try ImageLoader.discover(
+            return try ImageLoader.discoverContents(
                 in: folder,
                 isCancelled: {
                     gate.checkpoint()
@@ -1383,8 +1453,8 @@ enum RenderPreviews {
         try FileManager.default.copyItem(at: fixture, to: imageURL)
         let gate = ScanCheckpointGate()
         let viewer = ViewerController(
-            discoverImages: { folder, isCancelled in
-                try ImageLoader.discover(
+            discoverContents: { folder, isCancelled in
+                try ImageLoader.discoverContents(
                     in: folder,
                     isCancelled: {
                         gate.checkpoint()

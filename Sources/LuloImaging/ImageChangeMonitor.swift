@@ -2,16 +2,19 @@ import CoreServices
 import Foundation
 import LuloCore
 
-/// Watches an authorized folder, or checks just the opened file when sibling access was declined.
+/// Watches the current authorized folder, or checks just the opened file when sibling access was declined.
 public final class ImageChangeMonitor {
     private var stream: FSEventStreamRef?
     private var fileTask: Task<Void, Never>?
 
     public var isActive: Bool { stream != nil || fileTask != nil }
 
-    public init(fileAccess: FileAccess, folderAccess: FileAccess?, onChange: @escaping @Sendable () -> Void) {
+    public init(
+        fileAccess: FileAccess?, folderAccess: FileAccess?, watchFolder: URL? = nil,
+        onChange: @escaping @Sendable () -> Void
+    ) {
         if let folderAccess {
-            let callback = Callback(access: folderAccess, onChange: onChange)
+            let callback = Callback(access: folderAccess, folder: watchFolder ?? folderAccess.url, onChange: onChange)
             var context = FSEventStreamContext(
                 version: 0, info: Unmanaged.passUnretained(callback).toOpaque(),
                 retain: { pointer in
@@ -37,15 +40,15 @@ public final class ImageChangeMonitor {
                         // Standardizing a deleted file cannot remove /private. Its existing parent can,
                         // so normalize that directory before comparing it with the watched folder.
                         let parent = url.deletingLastPathComponent().standardizedFileURL
-                        if mustRescan || url == callback.folder
-                            || (parent == callback.folder && ImageFormat(url: url) != nil)
-                        {
+                        // A direct child can be an image, a folder, or an item removed by a rename.
+                        // Refresh for all of them so both gallery tiles and navigation stay current.
+                        if mustRescan || url == callback.folder || parent == callback.folder {
                             callback.onChange()
                             break
                         }
                     }
                 },
-                &context, [folderAccess.url.path] as CFArray, FSEventStreamEventId(kFSEventStreamEventIdSinceNow),
+                &context, [callback.folder.path] as CFArray, FSEventStreamEventId(kFSEventStreamEventIdSinceNow),
                 0.3,
                 UInt32(
                     kFSEventStreamCreateFlagUseCFTypes | kFSEventStreamCreateFlagFileEvents
@@ -59,6 +62,7 @@ public final class ImageChangeMonitor {
                 }
             }
         } else {
+            guard let fileAccess else { return }
             // FSEvents watches directories. Checking one file avoids observing unauthorized siblings
             // and follows atomic replacements/recreation, which a watch on the old inode cannot do.
             fileTask = Task.detached(priority: .utility) {
@@ -90,9 +94,9 @@ public final class ImageChangeMonitor {
         let folder: URL
         let onChange: @Sendable () -> Void
 
-        init(access: FileAccess, onChange: @escaping @Sendable () -> Void) {
+        init(access: FileAccess, folder: URL, onChange: @escaping @Sendable () -> Void) {
             self.access = access
-            folder = access.url.resolvingSymlinksInPath().standardizedFileURL
+            self.folder = folder.resolvingSymlinksInPath().standardizedFileURL
             self.onChange = onChange
         }
     }

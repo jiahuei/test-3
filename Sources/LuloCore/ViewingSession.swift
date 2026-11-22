@@ -42,6 +42,29 @@ public struct ImageEntry: Equatable, Sendable {
     }
 }
 
+public struct FolderEntry: Equatable, Sendable {
+    public let url: URL
+
+    public init(url: URL) {
+        // A directory URL may carry a trailing slash, which URL equality treats as distinct.
+        // Folder entries use the path form so selections and discovery results match.
+        self.url = URL(fileURLWithPath: url.path)
+    }
+
+    public var name: String { url.lastPathComponent }
+}
+
+/// Direct children of one folder. Discovery never recurses into `folders`.
+public struct FolderContents: Equatable, Sendable {
+    public var folders: [FolderEntry]
+    public var images: [ImageEntry]
+
+    public init(folders: [FolderEntry] = [], images: [ImageEntry] = []) {
+        self.folders = folders
+        self.images = images
+    }
+}
+
 public enum SortMethod: String, CaseIterable, Sendable {
     case name = "Name"
     case timeTaken = "Time Taken"
