@@ -46,7 +46,9 @@ public struct FolderEntry: Equatable, Sendable {
     public let url: URL
 
     public init(url: URL) {
-        self.url = url
+        // A directory URL may carry a trailing slash, which URL equality treats as distinct.
+        // Folder entries use the path form so selections and discovery results match.
+        self.url = URL(fileURLWithPath: url.path)
     }
 
     public var name: String { url.lastPathComponent }
