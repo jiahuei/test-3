@@ -143,12 +143,12 @@ final class BreadcrumbView: NSView {
         } else {
             parent.attributedTitle = NSAttributedString(string: "")
         }
-        folder.isHidden = !hasFolder || gallery
+        self.folder.isHidden = !hasFolder || gallery
         folderLabel.isHidden = !hasFolder || !gallery
-        folder.title = folder?.lastPathComponent ?? ""
-        folderLabel.stringValue = folder.title
-        folder.contentTintColor = Theme.textSecondary
-        folder.setAccessibilityLabel("Show gallery, \(folder.title)")
+        self.folder.title = folder?.lastPathComponent ?? ""
+        folderLabel.stringValue = self.folder.title
+        self.folder.contentTintColor = Theme.textSecondary
+        self.folder.setAccessibilityLabel("Show gallery, \(self.folder.title)")
         fileSlash.isHidden = !hasFolder || gallery || file == nil
         filename.isHidden = gallery || file == nil
         filename.stringValue = file?.lastPathComponent ?? ""
